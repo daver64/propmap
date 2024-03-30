@@ -2,6 +2,7 @@
 #include <cstdlib>
 #define PROPERTY_MAP_IMPLEMENTATION
 #include "propmap.hpp"
+
 int main(int argc, char *argv[])
 {
     property_map some_entity;
