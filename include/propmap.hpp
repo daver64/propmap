@@ -207,7 +207,7 @@ public:
                 pointer->val = val;
                 return true;
             }
-            return false; // Type mismatch
+            throw property_error("Type mismatch for property: " + key);
         }
         else
         {
@@ -226,21 +226,22 @@ public:
 #ifdef PROPERTY_MAP_THREAD_SAFE
         std::unique_lock<std::shared_mutex> lock(m);
 #endif
+        using DecayedType = std::decay_t<T>;
         std::string key{name};
         auto it = properties.find(key);
         if (it != properties.end())
         {
-            property<T>* pointer = dynamic_cast<property<T>*>(it->second.get());
+            property<DecayedType>* pointer = dynamic_cast<property<DecayedType>*>(it->second.get());
             if (pointer)
             {
-                pointer->val = std::move(val);
+                pointer->val = std::forward<T>(val);
                 return true;
             }
-            return false;
+            throw property_error("Type mismatch for property: " + key);
         }
         else
         {
-            auto success = properties.emplace(key, std::make_unique<property<T>>(std::move(val)));
+            auto success = properties.emplace(key, std::make_unique<property<DecayedType>>(std::forward<T>(val)));
             return success.second;
         }
     }
@@ -272,12 +273,13 @@ public:
 #ifdef PROPERTY_MAP_THREAD_SAFE
         std::unique_lock<std::shared_mutex> lock(m);
 #endif
+        using DecayedType = std::decay_t<T>;
         std::string key{name};
         if (properties.find(key) != properties.end())
         {
             return false;
         }
-        auto success = properties.emplace(key, std::make_unique<property<T>>(std::move(val)));
+        auto success = properties.emplace(key, std::make_unique<property<DecayedType>>(std::forward<T>(val)));
         return success.second;
     }
 
@@ -303,13 +305,15 @@ public:
         return properties.empty(); 
     }
 
-    // Iterator support (note: not thread-safe, use with caution)
+#ifndef PROPERTY_MAP_THREAD_SAFE
+    // Iterator support (disabled when thread safety is enabled due to race conditions)
     iterator begin() { return properties.begin(); }
     iterator end() { return properties.end(); }
     const_iterator begin() const { return properties.begin(); }
     const_iterator end() const { return properties.end(); }
     const_iterator cbegin() const { return properties.cbegin(); }
     const_iterator cend() const { return properties.cend(); }
+#endif
 
 private:
     std::unordered_map<std::string, std::unique_ptr<property_base>> properties;
@@ -321,6 +325,9 @@ private:
 
 #ifdef PROPERTY_MAP_IMPLEMENTATION
 #include <cstdio>
+
+// Forward declaration
+void test_property_map();
 
 void test_property_map()
 {
